@@ -52,7 +52,8 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!loading && !user && pathname !== "/login") {
+    const publicPaths = ["/login", "/reset-password"];
+    if (!loading && !user && !publicPaths.includes(pathname)) {
       router.replace("/login");
     }
     if (!loading && user && pathname === "/login") {

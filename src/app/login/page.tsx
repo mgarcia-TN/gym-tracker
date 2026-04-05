@@ -10,6 +10,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotMsg, setForgotMsg] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,11 +105,71 @@ export default function LoginPage() {
         </button>
       </form>
 
+      {!isRegister && !showForgot && (
+        <button
+          onClick={() => {
+            setShowForgot(true);
+            setForgotEmail(email);
+            setForgotMsg("");
+          }}
+          className="text-xs text-muted transition-colors hover:text-foreground"
+        >
+          Olvidé mi contraseña
+        </button>
+      )}
+
+      {showForgot && (
+        <div className="flex w-full max-w-xs flex-col gap-3 rounded-xl border border-border bg-card p-4">
+          <p className="text-xs text-muted">
+            Ingresá tu email y te mandamos un link para resetear la contraseña.
+          </p>
+          <input
+            type="email"
+            placeholder="Email"
+            value={forgotEmail}
+            onChange={(e) => setForgotEmail(e.target.value)}
+            className="rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
+          />
+          {forgotMsg && (
+            <p className="text-center text-xs text-green-400">{forgotMsg}</p>
+          )}
+          <button
+            disabled={forgotLoading || !forgotEmail.trim()}
+            onClick={async () => {
+              setForgotLoading(true);
+              setForgotMsg("");
+              const supabase = createClient();
+              const { error: resetError } =
+                await supabase.auth.resetPasswordForEmail(
+                  forgotEmail.trim(),
+                  { redirectTo: `${window.location.origin}/reset-password` },
+                );
+              if (resetError) {
+                setForgotMsg(resetError.message);
+              } else {
+                setForgotMsg("Email enviado! Revisá tu bandeja de entrada.");
+              }
+              setForgotLoading(false);
+            }}
+            className="rounded-xl bg-accent py-3 text-sm font-bold text-background transition-colors hover:bg-accent-hover disabled:opacity-50"
+          >
+            {forgotLoading ? "Enviando..." : "Enviar link"}
+          </button>
+          <button
+            onClick={() => setShowForgot(false)}
+            className="text-xs text-muted transition-colors hover:text-foreground"
+          >
+            Volver
+          </button>
+        </div>
+      )}
+
       <button
         onClick={() => {
           setIsRegister((v) => !v);
           setError("");
           setSuccess("");
+          setShowForgot(false);
         }}
         className="text-xs text-muted transition-colors hover:text-foreground"
       >
