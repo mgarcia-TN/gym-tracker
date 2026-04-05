@@ -31,7 +31,7 @@ export const TEMPLATES: WorkoutTemplate[] = [
   {
     name: "Pierna - Hombro",
     exercises: [
-      { name: "Sentadilla polea", muscle_group: "Piernas" },
+      { name: "Sentadilla barra asistida", muscle_group: "Piernas" },
       { name: "Prensa", muscle_group: "Piernas" },
       { name: "Press militar barra", muscle_group: "Hombro" },
       { name: "Vuelos laterales con polea", muscle_group: "Hombro" },
