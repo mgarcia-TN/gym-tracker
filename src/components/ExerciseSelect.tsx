@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
-import { MUSCLE_GROUPS, type Exercise, type MuscleGroup } from "@/types";
+import { MUSCLE_GROUPS, type Exercise, type MuscleGroup, type WorkoutEntry } from "@/types";
 
 interface ExerciseSelectProps {
   exercises: Exercise[];
   value: number | null;
   onChange: (exerciseId: number) => void;
   disabledIds?: number[];
+  frequencyMap?: WorkoutEntry[];
 }
 
 export default function ExerciseSelect({
@@ -15,15 +16,30 @@ export default function ExerciseSelect({
   value,
   onChange,
   disabledIds = [],
+  frequencyMap,
 }: ExerciseSelectProps) {
   const grouped = useMemo(() => {
+    const freqCount = new Map<number, number>();
+    if (frequencyMap) {
+      for (const entry of frequencyMap) {
+        freqCount.set(entry.exercise_id, (freqCount.get(entry.exercise_id) ?? 0) + 1);
+      }
+    }
+
     const map = new Map<MuscleGroup, Exercise[]>();
     for (const g of MUSCLE_GROUPS) map.set(g, []);
     for (const ex of exercises) {
       map.get(ex.muscle_group)?.push(ex);
     }
+
+    if (frequencyMap) {
+      for (const [, list] of map) {
+        list.sort((a, b) => (freqCount.get(b.id) ?? 0) - (freqCount.get(a.id) ?? 0));
+      }
+    }
+
     return map;
-  }, [exercises]);
+  }, [exercises, frequencyMap]);
 
   return (
     <select

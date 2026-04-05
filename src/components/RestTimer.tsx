@@ -4,14 +4,23 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 const PRESETS = [60, 90, 120, 150, 180];
 
+function requestNotificationPermission() {
+  if (typeof Notification !== "undefined" && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+}
+
 export default function RestTimer() {
   const [isOpen, setIsOpen] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [running, setRunning] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
+  const endTimeRef = useRef<number>(0);
+  const bgTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const runIdRef = useRef(0);
 
-  const playBeep = useCallback(() => {
+  const notifyDone = useCallback(() => {
     try {
       const ctx = audioRef.current ?? new AudioContext();
       audioRef.current = ctx;
@@ -22,41 +31,84 @@ export default function RestTimer() {
       osc.frequency.value = 880;
       gain.gain.value = 0.3;
       osc.start();
-      osc.stop(ctx.currentTime + 0.3);
+      osc.stop(ctx.currentTime + 0.5);
     } catch {
       // AudioContext not available
+    }
+
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate([300, 150, 300, 150, 300]);
+    }
+
+    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+      try {
+        new Notification("Descanso terminado", {
+          body: "A meterle de nuevo",
+          icon: "/icon-192x192.png",
+          tag: "rest-timer",
+        });
+      } catch {
+        // Notification failed
+      }
     }
   }, []);
 
   useEffect(() => {
-    if (running && seconds > 0) {
-      intervalRef.current = setInterval(() => {
-        setSeconds((prev) => {
-          if (prev <= 1) {
-            setRunning(false);
-            playBeep();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    requestNotificationPermission();
+  }, []);
+
+  function clearTimers() {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [running, seconds, playBeep]);
+    if (bgTimeoutRef.current) {
+      clearTimeout(bgTimeoutRef.current);
+      bgTimeoutRef.current = null;
+    }
+  }
 
   function startTimer(secs: number) {
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    clearTimers();
+    const id = ++runIdRef.current;
+    endTimeRef.current = Date.now() + secs * 1000;
     setSeconds(secs);
     setRunning(true);
+
+    bgTimeoutRef.current = setTimeout(() => {
+      if (runIdRef.current !== id) return;
+      clearTimers();
+      setRunning(false);
+      setSeconds(0);
+      notifyDone();
+    }, secs * 1000);
+
+    intervalRef.current = setInterval(() => {
+      if (runIdRef.current !== id) return;
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+      if (remaining <= 0) {
+        clearTimers();
+        setSeconds(0);
+        setRunning(false);
+        notifyDone();
+      } else {
+        setSeconds(remaining);
+      }
+    }, 250);
   }
 
   function stopTimer() {
-    if (intervalRef.current) clearInterval(intervalRef.current);
+    runIdRef.current++;
+    clearTimers();
     setRunning(false);
     setSeconds(0);
   }
+
+  useEffect(() => {
+    return () => {
+      clearTimers();
+    };
+  }, []);
 
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;

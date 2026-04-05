@@ -1,12 +1,20 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useExercises, addWorkoutEntry, getLastWorkoutForExercise } from "@/db/hooks";
+import {
+  useExercises,
+  useWorkoutEntries,
+  addWorkoutEntry,
+  getLastWorkoutForExercise,
+  getLatestWorkoutDay,
+  ensureExerciseExists,
+} from "@/db/hooks";
 import { useAuth } from "@/components/AuthProvider";
 import ExerciseSelect from "@/components/ExerciseSelect";
 import SeriesInput from "@/components/SeriesInput";
 import RestTimer from "@/components/RestTimer";
+import { TEMPLATES } from "@/data/templates";
 import type { SeriesData, WorkoutEntry } from "@/types";
 
 const SERIES_COUNT = 4;
@@ -27,6 +35,14 @@ function buildEmptySeries(): SeriesData[] {
   }));
 }
 
+function padSeries(series: SeriesData[]): SeriesData[] {
+  const padded = [...series];
+  while (padded.length < SERIES_COUNT) {
+    padded.push({ seriesNumber: padded.length + 1, weight: 0, reps: 0 });
+  }
+  return padded;
+}
+
 interface ExerciseBlock {
   key: number;
   exerciseId: number | null;
@@ -44,13 +60,33 @@ function createBlock(): ExerciseBlock {
   };
 }
 
+function createBlockWithExercise(exerciseId: number): ExerciseBlock {
+  return {
+    key: ++blockKeyCounter,
+    exerciseId,
+    series: buildEmptySeries(),
+    lastWorkout: null,
+  };
+}
+
+function createBlockFromEntry(entry: WorkoutEntry): ExerciseBlock {
+  return {
+    key: ++blockKeyCounter,
+    exerciseId: entry.exercise_id,
+    series: padSeries(entry.series),
+    lastWorkout: entry,
+  };
+}
+
 export default function NewWorkoutPage() {
   const router = useRouter();
   const { user } = useAuth();
   const exercises = useExercises();
+  const allEntries = useWorkoutEntries();
   const [date, setDate] = useState(todayISO);
   const [blocks, setBlocks] = useState<ExerciseBlock[]>([createBlock()]);
   const [saving, setSaving] = useState(false);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
 
   const usedExerciseIds = blocks
     .map((b) => b.exerciseId)
@@ -72,6 +108,52 @@ export default function NewWorkoutPage() {
     },
     [user],
   );
+
+  async function repeatLastWorkout() {
+    if (!user) return;
+    setLoadingTemplate(true);
+    try {
+      const lastDay = await getLatestWorkoutDay(user.id);
+      if (lastDay.length === 0) {
+        setLoadingTemplate(false);
+        return;
+      }
+      const newBlocks = lastDay.map((entry) => createBlockFromEntry(entry));
+      setBlocks(newBlocks);
+    } catch {
+      // failed to load
+    }
+    setLoadingTemplate(false);
+  }
+
+  async function applyTemplate(templateIdx: number) {
+    if (!user) return;
+    setLoadingTemplate(true);
+    const template = TEMPLATES[templateIdx];
+    const newBlocks: ExerciseBlock[] = [];
+
+    for (const tplEx of template.exercises) {
+      const exercise = exercises.find(
+        (e) => e.name.toLowerCase() === tplEx.name.toLowerCase(),
+      );
+      let exId: number;
+      if (exercise) {
+        exId = exercise.id;
+      } else {
+        exId = await ensureExerciseExists(tplEx.name, tplEx.muscle_group, user.id);
+      }
+      newBlocks.push(createBlockWithExercise(exId));
+    }
+
+    setBlocks(newBlocks);
+    setLoadingTemplate(false);
+
+    for (const block of newBlocks) {
+      if (block.exerciseId != null) {
+        fetchLastWorkout(block.key, block.exerciseId);
+      }
+    }
+  }
 
   function updateBlock(key: number, patch: Partial<ExerciseBlock>) {
     setBlocks((prev) =>
@@ -111,6 +193,17 @@ export default function NewWorkoutPage() {
 
   function addBlock() {
     setBlocks((prev) => [...prev, createBlock()]);
+  }
+
+  function moveBlock(key: number, direction: -1 | 1) {
+    setBlocks((prev) => {
+      const idx = prev.findIndex((b) => b.key === key);
+      const targetIdx = idx + direction;
+      if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      return next;
+    });
   }
 
   const validBlocks = blocks.filter(
@@ -162,6 +255,31 @@ export default function NewWorkoutPage() {
           />
         </div>
 
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-medium uppercase tracking-wider text-muted">
+            Cargar desde...
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={repeatLastWorkout}
+              disabled={loadingTemplate}
+              className="rounded-lg border border-accent/50 bg-accent/10 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
+            >
+              Repetir último
+            </button>
+            {TEMPLATES.map((tpl, idx) => (
+              <button
+                key={tpl.name}
+                onClick={() => applyTemplate(idx)}
+                disabled={loadingTemplate}
+                className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-medium text-foreground transition-colors hover:border-accent hover:text-accent disabled:opacity-40"
+              >
+                {tpl.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {blocks.map((block, blockIdx) => (
           <div
             key={block.key}
@@ -171,14 +289,38 @@ export default function NewWorkoutPage() {
               <span className="text-xs font-semibold uppercase tracking-wider text-muted">
                 Ejercicio {blockIdx + 1}
               </span>
-              {blocks.length > 1 && (
-                <button
-                  onClick={() => removeBlock(block.key)}
-                  className="text-xs text-danger/60 transition-colors hover:text-danger"
-                >
-                  Quitar
-                </button>
-              )}
+              <div className="flex items-center gap-1">
+                {blocks.length > 1 && blockIdx > 0 && (
+                  <button
+                    onClick={() => moveBlock(block.key, -1)}
+                    className="flex h-6 w-6 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
+                    title="Subir"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                      <path fillRule="evenodd" d="M9.47 6.47a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 1 1-1.06 1.06L10 8.06l-3.72 3.72a.75.75 0 0 1-1.06-1.06l4.25-4.25Z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
+                {blocks.length > 1 && blockIdx < blocks.length - 1 && (
+                  <button
+                    onClick={() => moveBlock(block.key, 1)}
+                    className="flex h-6 w-6 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
+                    title="Bajar"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                      <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0l-4.25-4.25a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                )}
+                {blocks.length > 1 && (
+                  <button
+                    onClick={() => removeBlock(block.key)}
+                    className="ml-1 text-xs text-danger/60 transition-colors hover:text-danger"
+                  >
+                    Quitar
+                  </button>
+                )}
+              </div>
             </div>
 
             <ExerciseSelect
@@ -188,6 +330,7 @@ export default function NewWorkoutPage() {
               disabledIds={usedExerciseIds.filter(
                 (eid) => eid !== block.exerciseId,
               )}
+              frequencyMap={allEntries}
             />
 
             {block.lastWorkout && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   useWorkoutEntries,
@@ -8,10 +8,12 @@ import {
   deleteWorkoutEntry,
   deleteWorkoutEntriesByDate,
   updateWorkoutEntry,
+  getMaxWeightForExercise,
+  getPreviousWorkoutForExercise,
 } from "@/db/hooks";
 import { useAuth } from "@/components/AuthProvider";
 import SeriesInput from "@/components/SeriesInput";
-import type { MuscleGroup, SeriesData } from "@/types";
+import type { MuscleGroup, SeriesData, WorkoutEntry } from "@/types";
 
 const SERIES_COUNT = 4;
 
@@ -40,6 +42,16 @@ function padSeries(series: SeriesData[]): SeriesData[] {
   return padded;
 }
 
+function diffLabel(current: number, previous: number): { text: string; color: string } | null {
+  const diff = current - previous;
+  if (diff === 0) return null;
+  const sign = diff > 0 ? "+" : "";
+  return {
+    text: `${sign}${diff}`,
+    color: diff > 0 ? "text-green-400" : "text-red-400",
+  };
+}
+
 export default function WorkoutDatePage() {
   const params = useParams();
   const router = useRouter();
@@ -62,6 +74,45 @@ export default function WorkoutDatePage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editSeries, setEditSeries] = useState<SeriesData[]>([]);
   const [saving, setSaving] = useState(false);
+  const [prMap, setPrMap] = useState<Map<number, number>>(new Map());
+  const [prevMap, setPrevMap] = useState<Map<number, WorkoutEntry>>(new Map());
+
+  useEffect(() => {
+    if (!user || entries.length === 0) return;
+    const exerciseIds = [...new Set(entries.map((e) => e.exercise_id))];
+
+    Promise.all(
+      exerciseIds.map(async (exId) => {
+        const maxW = await getMaxWeightForExercise(exId, user.id);
+        return [exId, maxW] as [number, number];
+      }),
+    ).then((results) => {
+      setPrMap(new Map(results));
+    });
+
+    Promise.all(
+      exerciseIds.map(async (exId) => {
+        const prev = await getPreviousWorkoutForExercise(exId, user.id, date);
+        return prev ? ([exId, prev] as [number, WorkoutEntry]) : null;
+      }),
+    ).then((results) => {
+      const map = new Map<number, WorkoutEntry>();
+      for (const r of results) {
+        if (r) map.set(r[0], r[1]);
+      }
+      setPrevMap(map);
+    });
+  }, [user, entries, date]);
+
+  function isSeriesPR(exerciseId: number, weight: number): boolean {
+    const maxWeight = prMap.get(exerciseId);
+    return maxWeight != null && weight > 0 && weight >= maxWeight;
+  }
+
+  function getPrevSeries(exerciseId: number, seriesNumber: number): SeriesData | undefined {
+    const prev = prevMap.get(exerciseId);
+    return prev?.series.find((s) => s.seriesNumber === seriesNumber);
+  }
 
   function startEdit(entryId: number, currentSeries: SeriesData[]) {
     setEditingId(entryId);
@@ -104,17 +155,8 @@ export default function WorkoutDatePage() {
           onClick={() => router.push("/")}
           className="flex h-8 w-8 items-center justify-center rounded-lg border border-border text-muted transition-colors hover:text-foreground"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="h-4 w-4"
-          >
-            <path
-              fillRule="evenodd"
-              d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z"
-              clipRule="evenodd"
-            />
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+            <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clipRule="evenodd" />
           </svg>
         </button>
         <div className="flex-1">
@@ -146,9 +188,7 @@ export default function WorkoutDatePage() {
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-bold">{exerciseName}</p>
                     {group && (
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${GROUP_COLORS[group]}`}
-                      >
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${GROUP_COLORS[group]}`}>
                         {group}
                       </span>
                     )}
@@ -201,25 +241,44 @@ export default function WorkoutDatePage() {
                   </div>
                 ) : (
                   <div className="flex gap-2">
-                    {entry.series.map((s) => (
-                      <div
-                        key={s.seriesNumber}
-                        className="flex flex-1 flex-col items-center rounded-lg bg-background px-2 py-2"
-                      >
-                        <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                          S{s.seriesNumber}
-                        </span>
-                        <span className="text-sm font-bold tabular-nums">
-                          {s.weight}
-                          <span className="text-xs font-normal text-muted">
-                            kg
+                    {entry.series.map((s) => {
+                      const prev = getPrevSeries(entry.exercise_id, s.seriesNumber);
+                      const weightDiff = prev ? diffLabel(s.weight, prev.weight) : null;
+                      const repsDiff = prev ? diffLabel(s.reps, prev.reps) : null;
+
+                      return (
+                        <div
+                          key={s.seriesNumber}
+                          className="relative flex flex-1 flex-col items-center rounded-lg bg-background px-2 py-2"
+                        >
+                          {isSeriesPR(entry.exercise_id, s.weight) && (
+                            <span className="absolute -top-1.5 -right-1.5 rounded-full bg-amber-500 px-1.5 py-0.5 text-[8px] font-bold text-background">
+                              PR
+                            </span>
+                          )}
+                          <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                            S{s.seriesNumber}
                           </span>
-                        </span>
-                        <span className="text-xs tabular-nums text-muted">
-                          {s.reps} reps
-                        </span>
-                      </div>
-                    ))}
+                          <span className="text-sm font-bold tabular-nums">
+                            {s.weight}
+                            <span className="text-xs font-normal text-muted">kg</span>
+                          </span>
+                          {weightDiff && (
+                            <span className={`text-[9px] font-semibold tabular-nums ${weightDiff.color}`}>
+                              {weightDiff.text}kg
+                            </span>
+                          )}
+                          <span className="text-xs tabular-nums text-muted">
+                            {s.reps} reps
+                          </span>
+                          {repsDiff && (
+                            <span className={`text-[9px] font-semibold tabular-nums ${repsDiff.color}`}>
+                              {repsDiff.text}r
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

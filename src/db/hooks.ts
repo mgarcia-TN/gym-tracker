@@ -208,6 +208,95 @@ export async function getLastWorkoutForExercise(
   return (data as WorkoutEntry) ?? null;
 }
 
+export async function getMaxWeightForExercise(
+  exerciseId: number,
+  userId: string,
+): Promise<number> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("workout_entries")
+    .select("series")
+    .eq("user_id", userId)
+    .eq("exercise_id", exerciseId);
+
+  if (!data) return 0;
+  let max = 0;
+  for (const row of data) {
+    const series = row.series as SeriesData[];
+    for (const s of series) {
+      if (s.weight > max) max = s.weight;
+    }
+  }
+  return max;
+}
+
+export async function ensureExerciseExists(
+  name: string,
+  muscleGroup: MuscleGroup,
+  userId: string,
+): Promise<number> {
+  const supabase = createClient();
+  const { data: existing } = await supabase
+    .from("exercises")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("name", name)
+    .limit(1)
+    .single();
+
+  if (existing) return existing.id;
+
+  const { data, error } = await supabase
+    .from("exercises")
+    .insert({ name, muscle_group: muscleGroup, user_id: userId })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+export async function getPreviousWorkoutForExercise(
+  exerciseId: number,
+  userId: string,
+  beforeDate: string,
+): Promise<WorkoutEntry | null> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("workout_entries")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("exercise_id", exerciseId)
+    .lt("date", beforeDate)
+    .order("date", { ascending: false })
+    .limit(1)
+    .single();
+  return (data as WorkoutEntry) ?? null;
+}
+
+export async function getLatestWorkoutDay(
+  userId: string,
+): Promise<WorkoutEntry[]> {
+  const supabase = createClient();
+  const { data: latest } = await supabase
+    .from("workout_entries")
+    .select("date")
+    .eq("user_id", userId)
+    .order("date", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (!latest) return [];
+
+  const { data } = await supabase
+    .from("workout_entries")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("date", latest.date)
+    .order("id");
+
+  return (data as WorkoutEntry[]) ?? [];
+}
+
 export async function deleteWorkoutEntriesByDate(
   date: string,
   userId: string,

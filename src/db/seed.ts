@@ -23,6 +23,10 @@ const DEFAULT_EXERCISES: { name: string; muscle_group: MuscleGroup }[] = [
   { name: "Vuelos laterales con polea", muscle_group: "Hombro" },
   { name: "Fondos", muscle_group: "Tríceps" },
   { name: "Dominadas", muscle_group: "Espalda" },
+  { name: "Sentadilla polea", muscle_group: "Piernas" },
+  { name: "Prensa", muscle_group: "Piernas" },
+  { name: "Press militar barra", muscle_group: "Hombro" },
+  { name: "Extensiones de cuádriceps máquina", muscle_group: "Piernas" },
 ];
 
 export async function seedExercisesIfEmpty(userId: string): Promise<void> {

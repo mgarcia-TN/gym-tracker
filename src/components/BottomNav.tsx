@@ -37,8 +37,8 @@ const tabs = [
     ),
   },
   {
-    href: "/progress",
-    label: "Progreso",
+    href: "/stats",
+    label: "Stats",
     icon: (active: boolean) => (
       <svg
         xmlns="http://www.w3.org/2000/svg"
