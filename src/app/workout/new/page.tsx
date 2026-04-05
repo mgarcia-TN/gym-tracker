@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useExercises, addWorkoutEntry } from "@/db/hooks";
+import { useAuth } from "@/components/AuthProvider";
 import ExerciseSelect from "@/components/ExerciseSelect";
 import SeriesInput from "@/components/SeriesInput";
 import type { SeriesData } from "@/types";
@@ -42,6 +43,7 @@ function createBlock(): ExerciseBlock {
 
 export default function NewWorkoutPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const exercises = useExercises();
   const [date, setDate] = useState(todayISO);
   const [blocks, setBlocks] = useState<ExerciseBlock[]>([createBlock()]);
@@ -87,19 +89,24 @@ export default function NewWorkoutPage() {
   }
 
   const validBlocks = blocks.filter(
-    (b) => b.exerciseId != null && b.series.some((s) => s.weight > 0 || s.reps > 0),
+    (b) =>
+      b.exerciseId != null &&
+      b.series.some((s) => s.weight > 0 || s.reps > 0),
   );
   const canSave = validBlocks.length > 0;
 
   async function handleSave() {
-    if (!canSave) return;
+    if (!canSave || !user) return;
     setSaving(true);
     const promises = validBlocks.map((b) =>
-      addWorkoutEntry({
-        date,
-        exerciseId: b.exerciseId!,
-        series: b.series.filter((s) => s.weight > 0 || s.reps > 0),
-      }),
+      addWorkoutEntry(
+        {
+          date,
+          exercise_id: b.exerciseId!,
+          series: b.series.filter((s) => s.weight > 0 || s.reps > 0),
+        },
+        user.id,
+      ),
     );
     await Promise.all(promises);
     router.push("/");

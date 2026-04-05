@@ -7,9 +7,11 @@ import {
   updateExercise,
   deleteExercise,
 } from "@/db/hooks";
+import { useAuth } from "@/components/AuthProvider";
 import { MUSCLE_GROUPS, type MuscleGroup } from "@/types";
 
 export default function ExercisesPage() {
+  const { user } = useAuth();
   const exercises = useExercises();
   const [name, setName] = useState("");
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup>("Pecho");
@@ -19,12 +21,16 @@ export default function ExercisesPage() {
 
   async function handleAdd() {
     const trimmed = name.trim();
-    if (!trimmed) return;
-    await addExercise(trimmed, muscleGroup);
+    if (!trimmed || !user) return;
+    await addExercise(trimmed, muscleGroup, user.id);
     setName("");
   }
 
-  function startEdit(id: number, currentName: string, currentGroup: MuscleGroup) {
+  function startEdit(
+    id: number,
+    currentName: string,
+    currentGroup: MuscleGroup,
+  ) {
     setEditingId(id);
     setEditName(currentName);
     setEditGroup(currentGroup);
@@ -34,7 +40,10 @@ export default function ExercisesPage() {
     if (editingId == null) return;
     const trimmed = editName.trim();
     if (!trimmed) return;
-    await updateExercise(editingId, { name: trimmed, muscleGroup: editGroup });
+    await updateExercise(editingId, {
+      name: trimmed,
+      muscle_group: editGroup,
+    });
     setEditingId(null);
   }
 
@@ -123,18 +132,18 @@ export default function ExercisesPage() {
               <>
                 <div className="flex-1">
                   <p className="text-sm font-medium">{ex.name}</p>
-                  <p className="text-xs text-muted">{ex.muscleGroup}</p>
+                  <p className="text-xs text-muted">{ex.muscle_group}</p>
                 </div>
                 <button
                   onClick={() =>
-                    startEdit(ex.id!, ex.name, ex.muscleGroup)
+                    startEdit(ex.id, ex.name, ex.muscle_group)
                   }
                   className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted transition-colors hover:text-foreground"
                 >
                   Editar
                 </button>
                 <button
-                  onClick={() => handleDelete(ex.id!)}
+                  onClick={() => handleDelete(ex.id)}
                   className="rounded-lg border border-danger/30 px-3 py-1.5 text-xs text-danger transition-colors hover:bg-danger/10"
                 >
                   Borrar

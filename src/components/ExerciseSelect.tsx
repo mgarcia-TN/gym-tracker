@@ -20,7 +20,7 @@ export default function ExerciseSelect({
     const map = new Map<MuscleGroup, Exercise[]>();
     for (const g of MUSCLE_GROUPS) map.set(g, []);
     for (const ex of exercises) {
-      map.get(ex.muscleGroup)?.push(ex);
+      map.get(ex.muscle_group)?.push(ex);
     }
     return map;
   }, [exercises]);
@@ -43,7 +43,7 @@ export default function ExerciseSelect({
               <option
                 key={ex.id}
                 value={ex.id}
-                disabled={disabledIds.includes(ex.id!)}
+                disabled={disabledIds.includes(ex.id)}
               >
                 {ex.name}
               </option>

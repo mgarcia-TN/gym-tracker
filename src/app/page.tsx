@@ -1,8 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useWorkoutEntries, useExercises } from "@/db/hooks";
+import { useAuth } from "@/components/AuthProvider";
+import { seedExercisesIfEmpty } from "@/db/seed";
 import WorkoutDayCard from "@/components/WorkoutCard";
 import type { WorkoutEntry } from "@/types";
 
@@ -20,11 +22,18 @@ function groupByDate(entries: WorkoutEntry[]): Map<string, WorkoutEntry[]> {
 }
 
 export default function HomePage() {
+  const { user, signOut } = useAuth();
   const entries = useWorkoutEntries();
   const exercises = useExercises();
 
+  useEffect(() => {
+    if (user) {
+      seedExercisesIfEmpty(user.id);
+    }
+  }, [user]);
+
   const exerciseMap = useMemo(
-    () => new Map(exercises.map((e) => [e.id!, e])),
+    () => new Map(exercises.map((e) => [e.id, e])),
     [exercises],
   );
 
@@ -36,7 +45,15 @@ export default function HomePage() {
 
   return (
     <div className="flex flex-1 flex-col p-4">
-      <h1 className="mb-4 text-xl font-bold">Mis entrenos</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-xl font-bold">Mis entrenos</h1>
+        <button
+          onClick={signOut}
+          className="text-xs text-muted transition-colors hover:text-foreground"
+        >
+          Salir
+        </button>
+      </div>
 
       {sortedDates.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">

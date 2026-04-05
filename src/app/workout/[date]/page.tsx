@@ -8,6 +8,7 @@ import {
   deleteWorkoutEntry,
   deleteWorkoutEntriesByDate,
 } from "@/db/hooks";
+import { useAuth } from "@/components/AuthProvider";
 import type { MuscleGroup } from "@/types";
 
 const GROUP_COLORS: Record<MuscleGroup, string> = {
@@ -30,13 +31,14 @@ function formatDate(iso: string): string {
 export default function WorkoutDatePage() {
   const params = useParams();
   const router = useRouter();
+  const { user } = useAuth();
   const date = params.date as string;
 
   const allEntries = useWorkoutEntries();
   const exercises = useExercises();
 
   const exerciseMap = useMemo(
-    () => new Map(exercises.map((e) => [e.id!, e])),
+    () => new Map(exercises.map((e) => [e.id, e])),
     [exercises],
   );
 
@@ -46,7 +48,8 @@ export default function WorkoutDatePage() {
   );
 
   async function handleDeleteDay() {
-    await deleteWorkoutEntriesByDate(date);
+    if (!user) return;
+    await deleteWorkoutEntriesByDate(date, user.id);
     router.push("/");
   }
 
@@ -96,9 +99,9 @@ export default function WorkoutDatePage() {
       ) : (
         <div className="flex flex-col gap-3">
           {entries.map((entry) => {
-            const exercise = exerciseMap.get(entry.exerciseId);
+            const exercise = exerciseMap.get(entry.exercise_id);
             const exerciseName = exercise?.name ?? "Ejercicio eliminado";
-            const group = exercise?.muscleGroup;
+            const group = exercise?.muscle_group;
 
             return (
               <div key={entry.id} className="rounded-xl bg-card p-4">
@@ -114,9 +117,7 @@ export default function WorkoutDatePage() {
                     )}
                   </div>
                   <button
-                    onClick={() =>
-                      entry.id != null && handleDeleteEntry(entry.id)
-                    }
+                    onClick={() => handleDeleteEntry(entry.id)}
                     className="rounded-lg px-2 py-1 text-xs text-danger/60 transition-colors hover:text-danger"
                   >
                     Borrar

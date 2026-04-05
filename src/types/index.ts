@@ -22,14 +22,16 @@ export interface SeriesData {
 }
 
 export interface Exercise {
-  id?: number;
+  id: number;
   name: string;
-  muscleGroup: MuscleGroup;
+  muscle_group: MuscleGroup;
+  user_id: string;
 }
 
 export interface WorkoutEntry {
-  id?: number;
+  id: number;
   date: string;
-  exerciseId: number;
+  exercise_id: number;
   series: SeriesData[];
+  user_id: string;
 }

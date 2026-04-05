@@ -34,7 +34,7 @@ export default function WorkoutDayCard({
   const muscleGroups = [
     ...new Set(
       entries
-        .map((e) => exerciseMap.get(e.exerciseId)?.muscleGroup)
+        .map((e) => exerciseMap.get(e.exercise_id)?.muscle_group)
         .filter((g): g is MuscleGroup => g != null),
     ),
   ];
@@ -58,9 +58,7 @@ export default function WorkoutDayCard({
         </div>
       </div>
       <div className="flex items-center gap-1 text-muted">
-        <span className="text-xs">
-          {entries.length} ej.
-        </span>
+        <span className="text-xs">{entries.length} ej.</span>
         <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 20 20"

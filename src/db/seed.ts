@@ -1,33 +1,40 @@
-import { db } from "./database";
-import type { Exercise, MuscleGroup } from "@/types";
+import { createClient } from "@/lib/supabase";
+import type { MuscleGroup } from "@/types";
 
-const DEFAULT_EXERCISES: Omit<Exercise, "id">[] = [
-  { name: "Pecho plano con barra", muscleGroup: "Pecho" },
-  { name: "Pecho plano con barra asistida", muscleGroup: "Pecho" },
-  { name: "Pecho plano con mancuernas", muscleGroup: "Pecho" },
-  { name: "Pecho inclinado con barra asistida", muscleGroup: "Pecho" },
-  { name: "Pecho inclinado con mancuernas", muscleGroup: "Pecho" },
-  { name: "Aperturas en polea", muscleGroup: "Pecho" },
-  { name: "Máquina de empuje pecho", muscleGroup: "Pecho" },
-  { name: "Curl de bíceps barra W", muscleGroup: "Bíceps" },
-  { name: "Curl de bíceps con mancuerna", muscleGroup: "Bíceps" },
-  { name: "Martillo con mancuernas", muscleGroup: "Bíceps" },
-  { name: "Curl de bíceps con polea a una mano", muscleGroup: "Bíceps" },
-  { name: "Jalones espalda con barra", muscleGroup: "Espalda" },
-  { name: "Jalón a un brazo en polea", muscleGroup: "Espalda" },
-  { name: "Pull over", muscleGroup: "Espalda" },
-  { name: "Extensión de tríceps en polea", muscleGroup: "Tríceps" },
-  { name: "Extensión de tríceps trasnuca en polea", muscleGroup: "Tríceps" },
-  { name: "Press francés con mancuernas", muscleGroup: "Tríceps" },
-  { name: "Vuelos laterales con mancuerna", muscleGroup: "Hombro" },
-  { name: "Vuelos laterales con polea", muscleGroup: "Hombro" },
-  { name: "Fondos", muscleGroup: "Tríceps" },
-  { name: "Dominadas", muscleGroup: "Espalda" },
+const DEFAULT_EXERCISES: { name: string; muscle_group: MuscleGroup }[] = [
+  { name: "Pecho plano con barra", muscle_group: "Pecho" },
+  { name: "Pecho plano con barra asistida", muscle_group: "Pecho" },
+  { name: "Pecho plano con mancuernas", muscle_group: "Pecho" },
+  { name: "Pecho inclinado con barra asistida", muscle_group: "Pecho" },
+  { name: "Pecho inclinado con mancuernas", muscle_group: "Pecho" },
+  { name: "Aperturas en polea", muscle_group: "Pecho" },
+  { name: "Máquina de empuje pecho", muscle_group: "Pecho" },
+  { name: "Curl de bíceps barra W", muscle_group: "Bíceps" },
+  { name: "Curl de bíceps con mancuerna", muscle_group: "Bíceps" },
+  { name: "Martillo con mancuernas", muscle_group: "Bíceps" },
+  { name: "Curl de bíceps con polea a una mano", muscle_group: "Bíceps" },
+  { name: "Jalones espalda con barra", muscle_group: "Espalda" },
+  { name: "Jalón a un brazo en polea", muscle_group: "Espalda" },
+  { name: "Pull over", muscle_group: "Espalda" },
+  { name: "Extensión de tríceps en polea", muscle_group: "Tríceps" },
+  { name: "Extensión de tríceps trasnuca en polea", muscle_group: "Tríceps" },
+  { name: "Press francés con mancuernas", muscle_group: "Tríceps" },
+  { name: "Vuelos laterales con mancuerna", muscle_group: "Hombro" },
+  { name: "Vuelos laterales con polea", muscle_group: "Hombro" },
+  { name: "Fondos", muscle_group: "Tríceps" },
+  { name: "Dominadas", muscle_group: "Espalda" },
 ];
 
-export async function seedExercisesIfEmpty(): Promise<void> {
-  const count = await db.exercises.count();
+export async function seedExercisesIfEmpty(userId: string): Promise<void> {
+  const supabase = createClient();
+
+  const { count } = await supabase
+    .from("exercises")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId);
+
   if (count === 0) {
-    await db.exercises.bulkAdd(DEFAULT_EXERCISES);
+    const rows = DEFAULT_EXERCISES.map((e) => ({ ...e, user_id: userId }));
+    await supabase.from("exercises").insert(rows);
   }
 }
