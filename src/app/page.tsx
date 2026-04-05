@@ -1,0 +1,77 @@
+"use client";
+
+import { useMemo } from "react";
+import Link from "next/link";
+import { useWorkoutEntries, useExercises } from "@/db/hooks";
+import WorkoutDayCard from "@/components/WorkoutCard";
+import type { WorkoutEntry } from "@/types";
+
+function groupByDate(entries: WorkoutEntry[]): Map<string, WorkoutEntry[]> {
+  const map = new Map<string, WorkoutEntry[]>();
+  for (const e of entries) {
+    const group = map.get(e.date);
+    if (group) {
+      group.push(e);
+    } else {
+      map.set(e.date, [e]);
+    }
+  }
+  return map;
+}
+
+export default function HomePage() {
+  const entries = useWorkoutEntries();
+  const exercises = useExercises();
+
+  const exerciseMap = useMemo(
+    () => new Map(exercises.map((e) => [e.id!, e])),
+    [exercises],
+  );
+
+  const dayGroups = useMemo(() => groupByDate(entries), [entries]);
+  const sortedDates = useMemo(
+    () => [...dayGroups.keys()].sort((a, b) => b.localeCompare(a)),
+    [dayGroups],
+  );
+
+  return (
+    <div className="flex flex-1 flex-col p-4">
+      <h1 className="mb-4 text-xl font-bold">Mis entrenos</h1>
+
+      {sortedDates.length === 0 ? (
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+          <div className="text-4xl">🏋️</div>
+          <p className="text-sm text-muted">
+            Todavía no registraste ningún entreno
+          </p>
+          <Link
+            href="/workout/new"
+            className="rounded-xl bg-accent px-6 py-3 text-sm font-bold text-background transition-colors hover:bg-accent-hover"
+          >
+            Registrar entreno
+          </Link>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {sortedDates.map((date) => (
+            <WorkoutDayCard
+              key={date}
+              date={date}
+              entries={dayGroups.get(date)!}
+              exerciseMap={exerciseMap}
+            />
+          ))}
+        </div>
+      )}
+
+      {sortedDates.length > 0 && (
+        <Link
+          href="/workout/new"
+          className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-2xl font-bold text-background shadow-lg transition-colors hover:bg-accent-hover"
+        >
+          +
+        </Link>
+      )}
+    </div>
+  );
+}
