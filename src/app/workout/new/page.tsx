@@ -6,6 +6,7 @@ import {
   useExercises,
   useWorkoutEntries,
   addWorkoutEntry,
+  updateWorkoutEntry,
   getLastWorkoutForExercise,
   getLatestWorkoutDay,
   ensureExerciseExists,
@@ -48,6 +49,7 @@ interface ExerciseBlock {
   exerciseId: number | null;
   series: SeriesData[];
   lastWorkout: WorkoutEntry | null;
+  savedId: number | null;
 }
 
 let blockKeyCounter = 0;
@@ -57,6 +59,7 @@ function createBlock(): ExerciseBlock {
     exerciseId: null,
     series: buildEmptySeries(),
     lastWorkout: null,
+    savedId: null,
   };
 }
 
@@ -66,6 +69,7 @@ function createBlockWithExercise(exerciseId: number): ExerciseBlock {
     exerciseId,
     series: buildEmptySeries(),
     lastWorkout: null,
+    savedId: null,
   };
 }
 
@@ -75,6 +79,7 @@ function createBlockFromEntry(entry: WorkoutEntry): ExerciseBlock {
     exerciseId: entry.exercise_id,
     series: padSeries(entry.series),
     lastWorkout: entry,
+    savedId: null,
   };
 }
 
@@ -87,6 +92,7 @@ export default function NewWorkoutPage() {
   const [blocks, setBlocks] = useState<ExerciseBlock[]>([createBlock()]);
   const [saving, setSaving] = useState(false);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(false);
 
   const usedExerciseIds = blocks
     .map((b) => b.exerciseId)
@@ -166,6 +172,7 @@ export default function NewWorkoutPage() {
       exerciseId,
       series: buildEmptySeries(),
       lastWorkout: null,
+      savedId: null,
     });
     fetchLastWorkout(blockKey, exerciseId);
   }
@@ -213,21 +220,45 @@ export default function NewWorkoutPage() {
   );
   const canSave = validBlocks.length > 0;
 
-  async function handleSave() {
-    if (!canSave || !user) return;
+  async function saveBlocks(): Promise<boolean> {
+    if (!canSave || !user) return false;
     setSaving(true);
-    const promises = validBlocks.map((b) =>
-      addWorkoutEntry(
-        {
-          date,
-          exercise_id: b.exerciseId!,
-          series: b.series.filter((s) => s.weight > 0 || s.reps > 0),
-        },
-        user.id,
-      ),
-    );
-    await Promise.all(promises);
-    router.push("/");
+
+    const updatedBlocks = [...blocks];
+
+    for (let i = 0; i < updatedBlocks.length; i++) {
+      const b = updatedBlocks[i];
+      if (b.exerciseId == null) continue;
+      const filledSeries = b.series.filter((s) => s.weight > 0 || s.reps > 0);
+      if (filledSeries.length === 0) continue;
+
+      if (b.savedId != null) {
+        await updateWorkoutEntry(b.savedId, { series: filledSeries });
+      } else {
+        const newId = await addWorkoutEntry(
+          { date, exercise_id: b.exerciseId, series: filledSeries },
+          user.id,
+        );
+        updatedBlocks[i] = { ...b, savedId: newId };
+      }
+    }
+
+    setBlocks(updatedBlocks);
+    setSaving(false);
+    return true;
+  }
+
+  async function handleSave() {
+    const ok = await saveBlocks();
+    if (ok) {
+      setSavedMsg(true);
+      setTimeout(() => setSavedMsg(false), 2000);
+    }
+  }
+
+  async function handleSaveAndExit() {
+    const ok = await saveBlocks();
+    if (ok) router.push("/");
   }
 
   return (
@@ -283,12 +314,23 @@ export default function NewWorkoutPage() {
         {blocks.map((block, blockIdx) => (
           <div
             key={block.key}
-            className="rounded-xl border border-border bg-card/50 p-3"
+            className={`rounded-xl border p-3 ${
+              block.savedId != null
+                ? "border-green-500/30 bg-green-500/5"
+                : "border-border bg-card/50"
+            }`}
           >
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-                Ejercicio {blockIdx + 1}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  Ejercicio {blockIdx + 1}
+                </span>
+                {block.savedId != null && (
+                  <span className="text-[9px] font-semibold uppercase text-green-400">
+                    guardado
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-1">
                 {blocks.length > 1 && blockIdx > 0 && (
                   <button
@@ -374,13 +416,28 @@ export default function NewWorkoutPage() {
           + Agregar otro ejercicio
         </button>
 
-        <button
-          onClick={handleSave}
-          disabled={!canSave || saving}
-          className="mt-2 rounded-xl bg-accent py-3.5 text-base font-bold text-background transition-colors hover:bg-accent-hover disabled:opacity-40"
-        >
-          {saving ? "Guardando..." : "Guardar entreno"}
-        </button>
+        <div className="mt-2 flex gap-3">
+          <button
+            onClick={handleSave}
+            disabled={!canSave || saving}
+            className="flex-1 rounded-xl border border-accent bg-accent/10 py-3.5 text-sm font-bold text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
+          >
+            {saving ? "Guardando..." : "Guardar"}
+          </button>
+          <button
+            onClick={handleSaveAndExit}
+            disabled={!canSave || saving}
+            className="flex-1 rounded-xl bg-accent py-3.5 text-sm font-bold text-background transition-colors hover:bg-accent-hover disabled:opacity-40"
+          >
+            {saving ? "Guardando..." : "Guardar y salir"}
+          </button>
+        </div>
+
+        {savedMsg && (
+          <p className="text-center text-xs font-semibold text-green-400">
+            Guardado correctamente
+          </p>
+        )}
       </div>
 
       <RestTimer />
