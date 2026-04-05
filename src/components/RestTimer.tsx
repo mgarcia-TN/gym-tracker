@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const PRESETS = [60, 90, 120];
+const PRESETS = [60, 90, 120, 150, 180];
 
 export default function RestTimer() {
   const [isOpen, setIsOpen] = useState(false);
@@ -96,16 +96,21 @@ export default function RestTimer() {
       </span>
 
       {!running && seconds === 0 && (
-        <div className="flex gap-2">
-          {PRESETS.map((p) => (
-            <button
-              key={p}
-              onClick={() => startTimer(p)}
-              className="rounded-lg bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent/25"
-            >
-              {p}s
-            </button>
-          ))}
+        <div className="flex flex-wrap justify-center gap-2">
+          {PRESETS.map((p) => {
+            const m = Math.floor(p / 60);
+            const s = p % 60;
+            const label = s === 0 ? `${m}:00` : `${m}:${String(s).padStart(2, "0")}`;
+            return (
+              <button
+                key={p}
+                onClick={() => startTimer(p)}
+                className="rounded-lg bg-accent/15 px-3 py-1.5 text-xs font-semibold text-accent transition-colors hover:bg-accent/25"
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       )}
 
