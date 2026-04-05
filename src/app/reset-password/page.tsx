@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
@@ -12,22 +12,55 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [checking, setChecking] = useState(true);
 
-  useEffect(() => {
+  const establishSession = useCallback(async () => {
     const supabase = createClient();
-    supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
+
+    const hash = window.location.hash;
+    if (hash && hash.includes("access_token")) {
+      const params = new URLSearchParams(hash.substring(1));
+      const accessToken = params.get("access_token");
+      const refreshToken = params.get("refresh_token");
+
+      if (accessToken && refreshToken) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+
+        if (!sessionError) {
+          setSessionReady(true);
+          setChecking(false);
+          return;
+        }
+      }
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
         setSessionReady(true);
+        setChecking(false);
+        subscription.unsubscribe();
       }
     });
 
-    if (typeof window !== "undefined" && window.location.hash.includes("access_token")) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
       setSessionReady(true);
+      setChecking(false);
+      subscription.unsubscribe();
+      return;
     }
 
-    const timeout = setTimeout(() => setSessionReady(true), 2000);
-    return () => clearTimeout(timeout);
+    setTimeout(() => {
+      setChecking(false);
+    }, 4000);
   }, []);
+
+  useEffect(() => {
+    establishSession();
+  }, [establishSession]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,10 +90,28 @@ export default function ResetPasswordPage() {
     }
   }
 
-  if (!sessionReady) {
+  if (checking) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!sessionReady) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
+        <span className="text-5xl">⚠️</span>
+        <h1 className="text-xl font-bold">Link expirado o inválido</h1>
+        <p className="text-center text-sm text-muted">
+          Pedí un nuevo link desde la pantalla de login.
+        </p>
+        <button
+          onClick={() => router.replace("/login")}
+          className="rounded-xl bg-accent px-6 py-3 text-sm font-bold text-background transition-colors hover:bg-accent-hover"
+        >
+          Ir al login
+        </button>
       </div>
     );
   }
