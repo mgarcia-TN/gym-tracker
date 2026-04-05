@@ -230,29 +230,42 @@ export async function getMaxWeightForExercise(
   return max;
 }
 
-export async function ensureExerciseExists(
+const ensureLocks = new Map<string, Promise<number>>();
+
+export function ensureExerciseExists(
   name: string,
   muscleGroup: MuscleGroup,
   userId: string,
 ): Promise<number> {
-  const supabase = createClient();
-  const { data: existing } = await supabase
-    .from("exercises")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("name", name)
-    .limit(1)
-    .single();
+  const key = `${userId}:${name.toLowerCase().trim()}`;
+  const existing = ensureLocks.get(key);
+  if (existing) return existing;
 
-  if (existing) return existing.id;
+  const promise = (async () => {
+    const supabase = createClient();
+    const { data: found } = await supabase
+      .from("exercises")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("name", name)
+      .limit(1)
+      .single();
 
-  const { data, error } = await supabase
-    .from("exercises")
-    .insert({ name, muscle_group: muscleGroup, user_id: userId })
-    .select("id")
-    .single();
-  if (error) throw error;
-  return data.id;
+    if (found) return found.id;
+
+    const { data, error } = await supabase
+      .from("exercises")
+      .insert({ name, muscle_group: muscleGroup, user_id: userId })
+      .select("id")
+      .single();
+    if (error) throw error;
+    return data.id;
+  })().finally(() => {
+    ensureLocks.delete(key);
+  });
+
+  ensureLocks.set(key, promise);
+  return promise;
 }
 
 export async function getPreviousWorkoutForExercise(

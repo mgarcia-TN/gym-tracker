@@ -29,7 +29,12 @@ const DEFAULT_EXERCISES: { name: string; muscle_group: MuscleGroup }[] = [
   { name: "Extensiones de cuádriceps máquina", muscle_group: "Piernas" },
 ];
 
+let seeded = false;
+
 export async function seedExercisesIfEmpty(userId: string): Promise<void> {
+  if (seeded) return;
+  seeded = true;
+
   const supabase = createClient();
 
   const { count } = await supabase
@@ -40,5 +45,39 @@ export async function seedExercisesIfEmpty(userId: string): Promise<void> {
   if (count === 0) {
     const rows = DEFAULT_EXERCISES.map((e) => ({ ...e, user_id: userId }));
     await supabase.from("exercises").insert(rows);
+  }
+}
+
+export async function deduplicateExercises(userId: string): Promise<void> {
+  const supabase = createClient();
+
+  const { data: allExercises } = await supabase
+    .from("exercises")
+    .select("*")
+    .eq("user_id", userId)
+    .order("id");
+
+  if (!allExercises || allExercises.length === 0) return;
+
+  const seen = new Map<string, number>();
+  const dupeIds: number[] = [];
+
+  for (const ex of allExercises) {
+    const key = ex.name.toLowerCase().trim();
+    if (seen.has(key)) {
+      dupeIds.push(ex.id);
+      const keepId = seen.get(key)!;
+      await supabase
+        .from("workout_entries")
+        .update({ exercise_id: keepId })
+        .eq("exercise_id", ex.id)
+        .eq("user_id", userId);
+    } else {
+      seen.set(key, ex.id);
+    }
+  }
+
+  if (dupeIds.length > 0) {
+    await supabase.from("exercises").delete().in("id", dupeIds);
   }
 }

@@ -4,7 +4,7 @@ import { useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useWorkoutEntries, useExercises } from "@/db/hooks";
 import { useAuth } from "@/components/AuthProvider";
-import { seedExercisesIfEmpty } from "@/db/seed";
+import { seedExercisesIfEmpty, deduplicateExercises } from "@/db/seed";
 import WorkoutDayCard from "@/components/WorkoutCard";
 import type { WorkoutEntry } from "@/types";
 
@@ -44,6 +44,7 @@ export default function HomePage() {
   useEffect(() => {
     if (user) {
       seedExercisesIfEmpty(user.id);
+      deduplicateExercises(user.id);
     }
   }, [user]);
 
