@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useExercises, addWorkoutEntry } from "@/db/hooks";
+import { useExercises, addWorkoutEntry, getLastWorkoutForExercise } from "@/db/hooks";
 import { useAuth } from "@/components/AuthProvider";
 import ExerciseSelect from "@/components/ExerciseSelect";
 import SeriesInput from "@/components/SeriesInput";
-import type { SeriesData } from "@/types";
+import RestTimer from "@/components/RestTimer";
+import type { SeriesData, WorkoutEntry } from "@/types";
 
 const SERIES_COUNT = 4;
 
@@ -30,6 +31,7 @@ interface ExerciseBlock {
   key: number;
   exerciseId: number | null;
   series: SeriesData[];
+  lastWorkout: WorkoutEntry | null;
 }
 
 let blockKeyCounter = 0;
@@ -38,6 +40,7 @@ function createBlock(): ExerciseBlock {
     key: ++blockKeyCounter,
     exerciseId: null,
     series: buildEmptySeries(),
+    lastWorkout: null,
   };
 }
 
@@ -53,6 +56,23 @@ export default function NewWorkoutPage() {
     .map((b) => b.exerciseId)
     .filter((id): id is number => id != null);
 
+  const fetchLastWorkout = useCallback(
+    async (blockKey: number, exerciseId: number) => {
+      if (!user) return;
+      try {
+        const last = await getLastWorkoutForExercise(exerciseId, user.id);
+        setBlocks((prev) =>
+          prev.map((b) =>
+            b.key === blockKey ? { ...b, lastWorkout: last } : b,
+          ),
+        );
+      } catch {
+        // no previous workout
+      }
+    },
+    [user],
+  );
+
   function updateBlock(key: number, patch: Partial<ExerciseBlock>) {
     setBlocks((prev) =>
       prev.map((b) => (b.key === key ? { ...b, ...patch } : b)),
@@ -60,7 +80,12 @@ export default function NewWorkoutPage() {
   }
 
   function handleExerciseChange(blockKey: number, exerciseId: number) {
-    updateBlock(blockKey, { exerciseId, series: buildEmptySeries() });
+    updateBlock(blockKey, {
+      exerciseId,
+      series: buildEmptySeries(),
+      lastWorkout: null,
+    });
+    fetchLastWorkout(blockKey, exerciseId);
   }
 
   function handleSeriesChange(
@@ -165,6 +190,21 @@ export default function NewWorkoutPage() {
               )}
             />
 
+            {block.lastWorkout && (
+              <div className="mt-2 rounded-lg bg-accent/10 px-3 py-2">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-accent">
+                  Última vez ({block.lastWorkout.date.split("-").reverse().join("/")}):
+                </span>
+                <div className="mt-1 flex gap-2">
+                  {block.lastWorkout.series.map((s) => (
+                    <span key={s.seriesNumber} className="text-xs tabular-nums text-accent/80">
+                      {s.weight}kg&times;{s.reps}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {block.exerciseId != null && (
               <div className="mt-3 flex flex-col gap-2">
                 <span className="text-[10px] uppercase tracking-wider text-muted">
@@ -199,6 +239,8 @@ export default function NewWorkoutPage() {
           {saving ? "Guardando..." : "Guardar entreno"}
         </button>
       </div>
+
+      <RestTimer />
     </div>
   );
 }

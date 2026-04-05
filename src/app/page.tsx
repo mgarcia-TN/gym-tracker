@@ -21,6 +21,21 @@ function groupByDate(entries: WorkoutEntry[]): Map<string, WorkoutEntry[]> {
   return map;
 }
 
+function getWeekDates(): { start: string; end: string } {
+  const now = new Date();
+  const day = now.getDay();
+  const diffToMon = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setDate(now.getDate() + diffToMon);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  return { start: fmt(monday), end: fmt(sunday) };
+}
+
 export default function HomePage() {
   const { user, signOut } = useAuth();
   const entries = useWorkoutEntries();
@@ -43,6 +58,16 @@ export default function HomePage() {
     [dayGroups],
   );
 
+  const weekDays = useMemo(() => {
+    const { start, end } = getWeekDates();
+    const uniqueDates = new Set(
+      entries
+        .map((e) => e.date)
+        .filter((d) => d >= start && d <= end),
+    );
+    return uniqueDates.size;
+  }, [entries]);
+
   return (
     <div className="flex flex-1 flex-col p-4">
       <div className="mb-4 flex items-center justify-between">
@@ -54,6 +79,20 @@ export default function HomePage() {
           Salir
         </button>
       </div>
+
+      {entries.length > 0 && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl bg-card p-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/15">
+            <span className="text-lg font-bold text-accent">{weekDays}</span>
+          </div>
+          <div>
+            <p className="text-sm font-semibold">
+              {weekDays === 1 ? "1 día" : `${weekDays} días`} esta semana
+            </p>
+            <p className="text-xs text-muted">Lunes a domingo</p>
+          </div>
+        </div>
+      )}
 
       {sortedDates.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">

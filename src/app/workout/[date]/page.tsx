@@ -1,15 +1,19 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   useWorkoutEntries,
   useExercises,
   deleteWorkoutEntry,
   deleteWorkoutEntriesByDate,
+  updateWorkoutEntry,
 } from "@/db/hooks";
 import { useAuth } from "@/components/AuthProvider";
-import type { MuscleGroup } from "@/types";
+import SeriesInput from "@/components/SeriesInput";
+import type { MuscleGroup, SeriesData } from "@/types";
+
+const SERIES_COUNT = 4;
 
 const GROUP_COLORS: Record<MuscleGroup, string> = {
   Pecho: "bg-red-500/15 text-red-400",
@@ -26,6 +30,14 @@ function formatDate(iso: string): string {
   const dayName = dateObj.toLocaleDateString("es-AR", { weekday: "long" });
   const capitalized = dayName.charAt(0).toUpperCase() + dayName.slice(1);
   return `${capitalized} ${d}/${m}/${y}`;
+}
+
+function padSeries(series: SeriesData[]): SeriesData[] {
+  const padded = [...series];
+  while (padded.length < SERIES_COUNT) {
+    padded.push({ seriesNumber: padded.length + 1, weight: 0, reps: 0 });
+  }
+  return padded;
 }
 
 export default function WorkoutDatePage() {
@@ -47,13 +59,37 @@ export default function WorkoutDatePage() {
     [allEntries, date],
   );
 
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editSeries, setEditSeries] = useState<SeriesData[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  function startEdit(entryId: number, currentSeries: SeriesData[]) {
+    setEditingId(entryId);
+    setEditSeries(padSeries(currentSeries));
+  }
+
+  function handleSeriesChange(idx: number, updated: SeriesData) {
+    setEditSeries((prev) => prev.map((s, i) => (i === idx ? updated : s)));
+  }
+
+  async function handleSaveEdit() {
+    if (editingId == null) return;
+    setSaving(true);
+    const filtered = editSeries.filter((s) => s.weight > 0 || s.reps > 0);
+    await updateWorkoutEntry(editingId, { series: filtered });
+    setEditingId(null);
+    setSaving(false);
+  }
+
   async function handleDeleteDay() {
     if (!user) return;
+    if (!confirm("¿Borrar todo el día? Esta acción no se puede deshacer.")) return;
     await deleteWorkoutEntriesByDate(date, user.id);
     router.push("/");
   }
 
   async function handleDeleteEntry(id: number) {
+    if (!confirm("¿Borrar este ejercicio?")) return;
     await deleteWorkoutEntry(id);
     const remaining = entries.filter((e) => e.id !== id);
     if (remaining.length === 0) {
@@ -102,6 +138,7 @@ export default function WorkoutDatePage() {
             const exercise = exerciseMap.get(entry.exercise_id);
             const exerciseName = exercise?.name ?? "Ejercicio eliminado";
             const group = exercise?.muscle_group;
+            const isEditing = editingId === entry.id;
 
             return (
               <div key={entry.id} className="rounded-xl bg-card p-4">
@@ -116,35 +153,75 @@ export default function WorkoutDatePage() {
                       </span>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleDeleteEntry(entry.id)}
-                    className="rounded-lg px-2 py-1 text-xs text-danger/60 transition-colors hover:text-danger"
-                  >
-                    Borrar
-                  </button>
+                  {!isEditing && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => startEdit(entry.id, entry.series)}
+                        className="rounded-lg px-2 py-1 text-xs text-muted transition-colors hover:text-foreground"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleDeleteEntry(entry.id)}
+                        className="rounded-lg px-2 py-1 text-xs text-danger/60 transition-colors hover:text-danger"
+                      >
+                        Borrar
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                <div className="flex gap-2">
-                  {entry.series.map((s) => (
-                    <div
-                      key={s.seriesNumber}
-                      className="flex flex-1 flex-col items-center rounded-lg bg-background px-2 py-2"
-                    >
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
-                        S{s.seriesNumber}
-                      </span>
-                      <span className="text-sm font-bold tabular-nums">
-                        {s.weight}
-                        <span className="text-xs font-normal text-muted">
-                          kg
-                        </span>
-                      </span>
-                      <span className="text-xs tabular-nums text-muted">
-                        {s.reps} reps
-                      </span>
+                {isEditing ? (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[10px] uppercase tracking-wider text-muted">
+                      Editando series
+                    </span>
+                    {editSeries.map((s, i) => (
+                      <SeriesInput
+                        key={s.seriesNumber}
+                        series={s}
+                        onChange={(updated) => handleSeriesChange(i, updated)}
+                      />
+                    ))}
+                    <div className="mt-1 flex gap-2">
+                      <button
+                        onClick={handleSaveEdit}
+                        disabled={saving}
+                        className="flex-1 rounded-lg bg-accent py-2 text-xs font-semibold text-background"
+                      >
+                        {saving ? "Guardando..." : "Guardar"}
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="rounded-lg border border-border px-4 py-2 text-xs text-muted"
+                      >
+                        Cancelar
+                      </button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    {entry.series.map((s) => (
+                      <div
+                        key={s.seriesNumber}
+                        className="flex flex-1 flex-col items-center rounded-lg bg-background px-2 py-2"
+                      >
+                        <span className="text-[10px] font-medium uppercase tracking-wider text-muted">
+                          S{s.seriesNumber}
+                        </span>
+                        <span className="text-sm font-bold tabular-nums">
+                          {s.weight}
+                          <span className="text-xs font-normal text-muted">
+                            kg
+                          </span>
+                        </span>
+                        <span className="text-xs tabular-nums text-muted">
+                          {s.reps} reps
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}

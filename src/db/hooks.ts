@@ -180,6 +180,34 @@ export async function deleteWorkoutEntry(id: number): Promise<void> {
   if (error) throw error;
 }
 
+export async function updateWorkoutEntry(
+  id: number,
+  changes: { series: SeriesData[] },
+): Promise<void> {
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("workout_entries")
+    .update(changes)
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function getLastWorkoutForExercise(
+  exerciseId: number,
+  userId: string,
+): Promise<WorkoutEntry | null> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("workout_entries")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("exercise_id", exerciseId)
+    .order("date", { ascending: false })
+    .limit(1)
+    .single();
+  return (data as WorkoutEntry) ?? null;
+}
+
 export async function deleteWorkoutEntriesByDate(
   date: string,
   userId: string,

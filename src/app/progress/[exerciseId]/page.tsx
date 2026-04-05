@@ -5,6 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useExercise, useWorkoutsByExercise } from "@/db/hooks";
 import ProgressChart from "@/components/ProgressChart";
 
+type ViewMode = "average" | "bySeries" | "volume";
+
+const VIEW_OPTIONS: { value: ViewMode; label: string }[] = [
+  { value: "average", label: "Promedio" },
+  { value: "bySeries", label: "Por serie" },
+  { value: "volume", label: "Volumen" },
+];
+
 function formatDate(iso: string): string {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
@@ -16,7 +24,7 @@ export default function ExerciseProgressPage() {
   const exerciseId = Number(params.exerciseId);
   const exercise = useExercise(exerciseId);
   const workouts = useWorkoutsByExercise(exerciseId);
-  const [viewMode, setViewMode] = useState<"average" | "bySeries">("average");
+  const [viewMode, setViewMode] = useState<ViewMode>("average");
 
   if (!exercise) {
     return (
@@ -50,26 +58,19 @@ export default function ExerciseProgressPage() {
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          onClick={() => setViewMode("average")}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-            viewMode === "average"
-              ? "bg-accent text-background"
-              : "bg-card text-muted"
-          }`}
-        >
-          Promedio
-        </button>
-        <button
-          onClick={() => setViewMode("bySeries")}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-            viewMode === "bySeries"
-              ? "bg-accent text-background"
-              : "bg-card text-muted"
-          }`}
-        >
-          Por serie
-        </button>
+        {VIEW_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setViewMode(opt.value)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              viewMode === opt.value
+                ? "bg-accent text-background"
+                : "bg-card text-muted"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       <div className="mb-6 rounded-xl bg-card p-3">

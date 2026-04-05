@@ -14,13 +14,14 @@ import type { WorkoutEntry } from "@/types";
 
 interface ProgressChartProps {
   workouts: WorkoutEntry[];
-  viewMode: "average" | "bySeries";
+  viewMode: "average" | "bySeries" | "volume";
 }
 
 interface ChartDataPoint {
   date: string;
   displayDate: string;
   avgWeight: number;
+  volume: number;
   [key: string]: string | number;
 }
 
@@ -50,21 +51,28 @@ export default function ProgressChart({
       date: w.date,
       displayDate: formatDate(w.date),
       avgWeight: 0,
+      volume: 0,
     };
 
     let totalWeight = 0;
+    let totalVolume = 0;
     for (const s of w.series) {
       point[`s${s.seriesNumber}`] = s.weight;
       totalWeight += s.weight;
+      totalVolume += s.weight * s.reps;
       if (s.seriesNumber > maxSeries) maxSeries = s.seriesNumber;
     }
     point.avgWeight =
       w.series.length > 0
         ? Math.round((totalWeight / w.series.length) * 10) / 10
         : 0;
+    point.volume = Math.round(totalVolume);
 
     return point;
   });
+
+  const isVolume = viewMode === "volume";
+  const yUnit = isVolume ? "" : "kg";
 
   return (
     <div className="h-64 w-full">
@@ -82,7 +90,7 @@ export default function ProgressChart({
           <YAxis
             tick={{ fill: "#888", fontSize: 11 }}
             tickLine={false}
-            unit="kg"
+            unit={yUnit}
           />
           <Tooltip
             contentStyle={{
@@ -100,6 +108,16 @@ export default function ProgressChart({
               stroke="#22c55e"
               strokeWidth={2}
               dot={{ r: 4, fill: "#22c55e" }}
+              activeDot={{ r: 6 }}
+            />
+          ) : viewMode === "volume" ? (
+            <Line
+              type="monotone"
+              dataKey="volume"
+              name="Volumen (kg x reps)"
+              stroke="#a78bfa"
+              strokeWidth={2}
+              dot={{ r: 4, fill: "#a78bfa" }}
               activeDot={{ r: 6 }}
             />
           ) : (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   useExercises,
   addExercise,
@@ -18,6 +18,17 @@ export default function ExercisesPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editGroup, setEditGroup] = useState<MuscleGroup>("Pecho");
+  const [search, setSearch] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return exercises;
+    const q = search.toLowerCase();
+    return exercises.filter(
+      (ex) =>
+        ex.name.toLowerCase().includes(q) ||
+        ex.muscle_group.toLowerCase().includes(q),
+    );
+  }, [exercises, search]);
 
   async function handleAdd() {
     const trimmed = name.trim();
@@ -48,6 +59,7 @@ export default function ExercisesPage() {
   }
 
   async function handleDelete(id: number) {
+    if (!confirm("¿Borrar este ejercicio y todo su historial?")) return;
     await deleteExercise(id);
     if (editingId === id) setEditingId(null);
   }
@@ -85,8 +97,16 @@ export default function ExercisesPage() {
         </button>
       </div>
 
+      <input
+        type="text"
+        placeholder="Buscar ejercicio..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="mb-3 rounded-lg border border-border bg-card px-3 py-2.5 text-sm placeholder:text-muted focus:border-accent focus:outline-none"
+      />
+
       <div className="flex flex-col gap-2">
-        {exercises.map((ex) => (
+        {filtered.map((ex) => (
           <div
             key={ex.id}
             className="flex items-center gap-3 rounded-xl bg-card p-3"
@@ -152,6 +172,12 @@ export default function ExercisesPage() {
             )}
           </div>
         ))}
+
+        {filtered.length === 0 && exercises.length > 0 && (
+          <p className="py-8 text-center text-sm text-muted">
+            Sin resultados para &ldquo;{search}&rdquo;
+          </p>
+        )}
 
         {exercises.length === 0 && (
           <p className="py-8 text-center text-sm text-muted">
