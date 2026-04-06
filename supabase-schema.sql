@@ -16,6 +16,7 @@ create table workout_entries (
   date text not null,
   exercise_id bigint references exercises(id) on delete cascade not null,
   series jsonb not null default '[]',
+  sort_order int not null default 0,
   created_at timestamptz default now()
 );
 

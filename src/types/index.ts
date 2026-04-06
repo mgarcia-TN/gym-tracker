@@ -34,4 +34,5 @@ export interface WorkoutEntry {
   exercise_id: number;
   series: SeriesData[];
   user_id: string;
+  sort_order: number;
 }

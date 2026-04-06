@@ -75,7 +75,9 @@ export function useWorkoutEntries(): WorkoutEntry[] {
       .from("workout_entries")
       .select("*")
       .eq("user_id", user.id)
-      .order("date", { ascending: false });
+      .order("date", { ascending: false })
+      .order("sort_order")
+      .order("id");
     if (data) setEntries(data as WorkoutEntry[]);
   }, [user]);
 
@@ -158,13 +160,14 @@ export async function deleteExercise(id: number): Promise<void> {
 }
 
 export async function addWorkoutEntry(
-  entry: { date: string; exercise_id: number; series: SeriesData[] },
+  entry: { date: string; exercise_id: number; series: SeriesData[]; sort_order?: number },
   userId: string,
 ): Promise<number> {
   const supabase = createClient();
+  const sortOrder = entry.sort_order ?? 0;
   const { data, error } = await supabase
     .from("workout_entries")
-    .insert({ ...entry, user_id: userId })
+    .insert({ date: entry.date, exercise_id: entry.exercise_id, series: entry.series, sort_order: sortOrder, user_id: userId })
     .select("id")
     .single();
   if (error) throw error;
@@ -305,9 +308,21 @@ export async function getLatestWorkoutDay(
     .select("*")
     .eq("user_id", userId)
     .eq("date", latest.date)
+    .order("sort_order")
     .order("id");
 
   return (data as WorkoutEntry[]) ?? [];
+}
+
+export async function swapWorkoutEntryOrder(
+  idA: number,
+  sortA: number,
+  idB: number,
+  sortB: number,
+): Promise<void> {
+  const supabase = createClient();
+  await supabase.from("workout_entries").update({ sort_order: sortB }).eq("id", idA);
+  await supabase.from("workout_entries").update({ sort_order: sortA }).eq("id", idB);
 }
 
 export async function deleteWorkoutEntriesByDate(

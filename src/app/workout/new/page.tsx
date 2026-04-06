@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   useExercises,
@@ -93,6 +93,7 @@ export default function NewWorkoutPage() {
   const [saving, setSaving] = useState(false);
   const [loadingTemplate, setLoadingTemplate] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
+  const blockRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   const usedExerciseIds = blocks
     .map((b) => b.exerciseId)
@@ -207,6 +208,51 @@ export default function NewWorkoutPage() {
       const idx = prev.findIndex((b) => b.key === key);
       const targetIdx = idx + direction;
       if (targetIdx < 0 || targetIdx >= prev.length) return prev;
+
+      const a = prev[idx];
+      const b = prev[targetIdx];
+      const elA = blockRefs.current.get(a.key);
+      const elB = blockRefs.current.get(b.key);
+
+      if (elA && elB) {
+        const rectA = elA.getBoundingClientRect();
+        const rectB = elB.getBoundingClientRect();
+        const deltaA = rectB.top - rectA.top;
+        const deltaB = rectA.top - rectB.top;
+
+        elA.style.transition = "none";
+        elA.style.transform = "translateY(0px)";
+        elB.style.transition = "none";
+        elB.style.transform = "translateY(0px)";
+
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            elA.style.transition = "transform 250ms ease";
+            elA.style.transform = `translateY(${deltaA}px)`;
+            elB.style.transition = "transform 250ms ease";
+            elB.style.transform = `translateY(${deltaB}px)`;
+
+            setTimeout(() => {
+              elA.style.transition = "none";
+              elA.style.transform = "";
+              elB.style.transition = "none";
+              elB.style.transform = "";
+
+              setBlocks((current) => {
+                const i = current.findIndex((bl) => bl.key === a.key);
+                const j = current.findIndex((bl) => bl.key === b.key);
+                if (i === -1 || j === -1) return current;
+                const next = [...current];
+                [next[i], next[j]] = [next[j], next[i]];
+                return next;
+              });
+            }, 260);
+          });
+        });
+
+        return prev;
+      }
+
       const next = [...prev];
       [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
       return next;
@@ -236,7 +282,7 @@ export default function NewWorkoutPage() {
         await updateWorkoutEntry(b.savedId, { series: filledSeries });
       } else {
         const newId = await addWorkoutEntry(
-          { date, exercise_id: b.exerciseId, series: filledSeries },
+          { date, exercise_id: b.exerciseId, series: filledSeries, sort_order: i },
           user.id,
         );
         updatedBlocks[i] = { ...b, savedId: newId };
@@ -314,6 +360,7 @@ export default function NewWorkoutPage() {
         {blocks.map((block, blockIdx) => (
           <div
             key={block.key}
+            ref={(el) => { if (el) blockRefs.current.set(block.key, el); else blockRefs.current.delete(block.key); }}
             className={`rounded-xl border p-3 ${
               block.savedId != null
                 ? "border-green-500/30 bg-green-500/5"

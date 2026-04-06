@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   useWorkoutEntries,
@@ -8,6 +8,7 @@ import {
   deleteWorkoutEntry,
   deleteWorkoutEntriesByDate,
   updateWorkoutEntry,
+  swapWorkoutEntryOrder,
   getMaxWeightForExercise,
   getPreviousWorkoutForExercise,
 } from "@/db/hooks";
@@ -66,10 +67,20 @@ export default function WorkoutDatePage() {
     [exercises],
   );
 
-  const entries = useMemo(
-    () => allEntries.filter((e) => e.date === date),
+  const rawEntries = useMemo(
+    () => allEntries.filter((e) => e.date === date).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.id - b.id),
     [allEntries, date],
   );
+
+  const [orderedEntries, setOrderedEntries] = useState<WorkoutEntry[]>([]);
+  const [swappingId, setSwappingId] = useState<number | null>(null);
+  const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+  useEffect(() => {
+    setOrderedEntries(rawEntries);
+  }, [rawEntries]);
+
+  const entries = orderedEntries;
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editSeries, setEditSeries] = useState<SeriesData[]>([]);
@@ -132,6 +143,65 @@ export default function WorkoutDatePage() {
     setSaving(false);
   }
 
+  async function moveEntry(entryId: number, direction: -1 | 1) {
+    const idx = orderedEntries.findIndex((e) => e.id === entryId);
+    const targetIdx = idx + direction;
+    if (targetIdx < 0 || targetIdx >= orderedEntries.length) return;
+
+    const a = orderedEntries[idx];
+    const b = orderedEntries[targetIdx];
+
+    const elA = itemRefs.current.get(a.id);
+    const elB = itemRefs.current.get(b.id);
+
+    if (elA && elB) {
+      const rectA = elA.getBoundingClientRect();
+      const rectB = elB.getBoundingClientRect();
+      const deltaA = rectB.top - rectA.top;
+      const deltaB = rectA.top - rectB.top;
+
+      elA.style.transition = "none";
+      elA.style.transform = `translateY(0px)`;
+      elB.style.transition = "none";
+      elB.style.transform = `translateY(0px)`;
+
+      requestAnimationFrame(() => {
+        elA.style.transition = "none";
+        elA.style.transform = `translateY(0px)`;
+        elB.style.transition = "none";
+        elB.style.transform = `translateY(0px)`;
+
+        requestAnimationFrame(() => {
+          elA.style.transition = "transform 250ms ease";
+          elA.style.transform = `translateY(${deltaA}px)`;
+          elB.style.transition = "transform 250ms ease";
+          elB.style.transform = `translateY(${deltaB}px)`;
+
+          setTimeout(() => {
+            elA.style.transition = "none";
+            elA.style.transform = "";
+            elB.style.transition = "none";
+            elB.style.transform = "";
+
+            const next = [...orderedEntries];
+            [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+            setOrderedEntries(next);
+          }, 260);
+        });
+      });
+    } else {
+      const next = [...orderedEntries];
+      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+      setOrderedEntries(next);
+    }
+
+    setSwappingId(entryId);
+    const sortA = a.sort_order ?? idx;
+    const sortB = b.sort_order ?? targetIdx;
+    await swapWorkoutEntryOrder(a.id, sortA, b.id, sortB);
+    setSwappingId(null);
+  }
+
   async function handleDeleteDay() {
     if (!user) return;
     if (!confirm("¿Borrar todo el día? Esta acción no se puede deshacer.")) return;
@@ -176,14 +246,18 @@ export default function WorkoutDatePage() {
         </p>
       ) : (
         <div className="flex flex-col gap-3">
-          {entries.map((entry) => {
+          {entries.map((entry, entryIdx) => {
             const exercise = exerciseMap.get(entry.exercise_id);
             const exerciseName = exercise?.name ?? "Ejercicio eliminado";
             const group = exercise?.muscle_group;
             const isEditing = editingId === entry.id;
 
             return (
-              <div key={entry.id} className="rounded-xl bg-card p-4">
+              <div
+                key={entry.id}
+                ref={(el) => { if (el) itemRefs.current.set(entry.id, el); else itemRefs.current.delete(entry.id); }}
+                className="rounded-xl bg-card p-4"
+              >
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-bold">{exerciseName}</p>
@@ -194,7 +268,31 @@ export default function WorkoutDatePage() {
                     )}
                   </div>
                   {!isEditing && (
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-1">
+                      {entries.length > 1 && entryIdx > 0 && (
+                        <button
+                          onClick={() => moveEntry(entry.id, -1)}
+                          disabled={swappingId !== null}
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted transition-colors hover:text-foreground disabled:opacity-40"
+                          title="Subir"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                            <path fillRule="evenodd" d="M9.47 6.47a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 1 1-1.06 1.06L10 8.06l-3.72 3.72a.75.75 0 0 1-1.06-1.06l4.25-4.25Z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      )}
+                      {entries.length > 1 && entryIdx < entries.length - 1 && (
+                        <button
+                          onClick={() => moveEntry(entry.id, 1)}
+                          disabled={swappingId !== null}
+                          className="flex h-6 w-6 items-center justify-center rounded text-muted transition-colors hover:text-foreground disabled:opacity-40"
+                          title="Bajar"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
+                            <path fillRule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0l-4.25-4.25a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                          </svg>
+                        </button>
+                      )}
                       <button
                         onClick={() => startEdit(entry.id, entry.series)}
                         className="rounded-lg px-2 py-1 text-xs text-muted transition-colors hover:text-foreground"
