@@ -314,15 +314,16 @@ export async function getLatestWorkoutDay(
   return (data as WorkoutEntry[]) ?? [];
 }
 
-export async function swapWorkoutEntryOrder(
-  idA: number,
-  sortA: number,
-  idB: number,
-  sortB: number,
+export async function saveEntryOrder(
+  entries: { id: number; sort_order: number }[],
 ): Promise<void> {
   const supabase = createClient();
-  await supabase.from("workout_entries").update({ sort_order: sortB }).eq("id", idA);
-  await supabase.from("workout_entries").update({ sort_order: sortA }).eq("id", idB);
+  for (const entry of entries) {
+    await supabase
+      .from("workout_entries")
+      .update({ sort_order: entry.sort_order })
+      .eq("id", entry.id);
+  }
 }
 
 export async function deleteWorkoutEntriesByDate(

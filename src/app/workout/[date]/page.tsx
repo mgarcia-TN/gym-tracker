@@ -8,7 +8,7 @@ import {
   deleteWorkoutEntry,
   deleteWorkoutEntriesByDate,
   updateWorkoutEntry,
-  swapWorkoutEntryOrder,
+  saveEntryOrder,
   getMaxWeightForExercise,
   getPreviousWorkoutForExercise,
 } from "@/db/hooks";
@@ -75,9 +75,12 @@ export default function WorkoutDatePage() {
   const [orderedEntries, setOrderedEntries] = useState<WorkoutEntry[]>([]);
   const [swappingId, setSwappingId] = useState<number | null>(null);
   const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const isReordering = useRef(false);
 
   useEffect(() => {
-    setOrderedEntries(rawEntries);
+    if (!isReordering.current) {
+      setOrderedEntries(rawEntries);
+    }
   }, [rawEntries]);
 
   const entries = orderedEntries;
@@ -147,12 +150,19 @@ export default function WorkoutDatePage() {
     const idx = orderedEntries.findIndex((e) => e.id === entryId);
     const targetIdx = idx + direction;
     if (targetIdx < 0 || targetIdx >= orderedEntries.length) return;
+    if (swappingId !== null) return;
+
+    setSwappingId(entryId);
+    isReordering.current = true;
 
     const a = orderedEntries[idx];
     const b = orderedEntries[targetIdx];
-
     const elA = itemRefs.current.get(a.id);
     const elB = itemRefs.current.get(b.id);
+
+    const next = [...orderedEntries];
+    [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
+    const orderPayload = next.map((e, i) => ({ id: e.id, sort_order: i }));
 
     if (elA && elB) {
       const rectA = elA.getBoundingClientRect();
@@ -161,16 +171,11 @@ export default function WorkoutDatePage() {
       const deltaB = rectA.top - rectB.top;
 
       elA.style.transition = "none";
-      elA.style.transform = `translateY(0px)`;
+      elA.style.transform = "translateY(0px)";
       elB.style.transition = "none";
-      elB.style.transform = `translateY(0px)`;
+      elB.style.transform = "translateY(0px)";
 
       requestAnimationFrame(() => {
-        elA.style.transition = "none";
-        elA.style.transform = `translateY(0px)`;
-        elB.style.transition = "none";
-        elB.style.transform = `translateY(0px)`;
-
         requestAnimationFrame(() => {
           elA.style.transition = "transform 250ms ease";
           elA.style.transform = `translateY(${deltaA}px)`;
@@ -182,24 +187,17 @@ export default function WorkoutDatePage() {
             elA.style.transform = "";
             elB.style.transition = "none";
             elB.style.transform = "";
-
-            const next = [...orderedEntries];
-            [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
             setOrderedEntries(next);
           }, 260);
         });
       });
     } else {
-      const next = [...orderedEntries];
-      [next[idx], next[targetIdx]] = [next[targetIdx], next[idx]];
       setOrderedEntries(next);
     }
 
-    setSwappingId(entryId);
-    const sortA = a.sort_order ?? idx;
-    const sortB = b.sort_order ?? targetIdx;
-    await swapWorkoutEntryOrder(a.id, sortA, b.id, sortB);
+    await saveEntryOrder(orderPayload);
     setSwappingId(null);
+    setTimeout(() => { isReordering.current = false; }, 500);
   }
 
   async function handleDeleteDay() {
