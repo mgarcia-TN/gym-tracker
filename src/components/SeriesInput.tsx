@@ -20,14 +20,15 @@ export default function SeriesInput({ series, onChange }: SeriesInputProps) {
             Peso (kg)
           </label>
           <input
-            type="number"
+            type="text"
             inputMode="decimal"
-            min={0}
-            step={0.5}
-            value={series.weight || ""}
-            onChange={(e) =>
-              onChange({ ...series, weight: parseFloat(e.target.value) || 0 })
-            }
+            value={series.weight ? String(series.weight).replace(".", ",") : ""}
+            onChange={(e) => {
+              const raw = e.target.value.replace(",", ".");
+              if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
+                onChange({ ...series, weight: raw === "" ? 0 : parseFloat(raw) || 0 });
+              }
+            }}
             placeholder="0"
             className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-center text-base font-medium tabular-nums focus:border-accent focus:outline-none"
           />
