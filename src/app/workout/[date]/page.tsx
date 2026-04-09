@@ -316,6 +316,7 @@ export default function WorkoutDatePage() {
                       <SeriesInput
                         key={s.seriesNumber}
                         series={s}
+                        syncKey={editingId}
                         onChange={(updated) => handleSeriesChange(i, updated)}
                       />
                     ))}

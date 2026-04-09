@@ -446,6 +446,7 @@ export default function NewWorkoutPage() {
                   <SeriesInput
                     key={s.seriesNumber}
                     series={s}
+                    syncKey={`${block.key}-${block.exerciseId ?? "none"}`}
                     onChange={(updated) =>
                       handleSeriesChange(block.key, i, updated)
                     }

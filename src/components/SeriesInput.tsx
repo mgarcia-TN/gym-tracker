@@ -1,13 +1,45 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { SeriesData } from "@/types";
 
 interface SeriesInputProps {
   series: SeriesData;
   onChange: (updated: SeriesData) => void;
+  /** When this value changes (ej. ejercicio o entrada en edición), el texto del peso se resetea desde `series`. */
+  syncKey?: string | number | null;
 }
 
-export default function SeriesInput({ series, onChange }: SeriesInputProps) {
+function formatWeightDisplay(weight: number): string {
+  if (weight === 0) return "";
+  return String(weight).replace(".", ",");
+}
+
+function parseWeightToNumber(display: string): number {
+  const raw = display.replace(",", ".").trim();
+  if (raw === "" || raw === ".") return 0;
+  const n = parseFloat(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function isValidPartialWeightInput(value: string): boolean {
+  const normalized = value.replace(",", ".");
+  return value === "" || /^\d*\.?\d*$/.test(normalized);
+}
+
+export default function SeriesInput({
+  series,
+  onChange,
+  syncKey,
+}: SeriesInputProps) {
+  const [weightText, setWeightText] = useState(() =>
+    formatWeightDisplay(series.weight),
+  );
+
+  useEffect(() => {
+    setWeightText(formatWeightDisplay(series.weight));
+  }, [syncKey]);
+
   return (
     <div className="flex items-center gap-3 rounded-lg bg-background p-3">
       <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent/15 text-xs font-bold text-accent">
@@ -22,12 +54,19 @@ export default function SeriesInput({ series, onChange }: SeriesInputProps) {
           <input
             type="text"
             inputMode="decimal"
-            value={series.weight ? String(series.weight).replace(".", ",") : ""}
+            value={weightText}
             onChange={(e) => {
-              const raw = e.target.value.replace(",", ".");
-              if (raw === "" || /^\d*\.?\d*$/.test(raw)) {
-                onChange({ ...series, weight: raw === "" ? 0 : parseFloat(raw) || 0 });
-              }
+              const v = e.target.value;
+              if (!isValidPartialWeightInput(v)) return;
+              setWeightText(v);
+              onChange({
+                ...series,
+                weight: parseWeightToNumber(v),
+              });
+            }}
+            onBlur={() => {
+              const parsed = parseWeightToNumber(weightText);
+              setWeightText(formatWeightDisplay(parsed));
             }}
             placeholder="0"
             className="w-full rounded-lg border border-border bg-card px-3 py-2.5 text-center text-base font-medium tabular-nums focus:border-accent focus:outline-none"
