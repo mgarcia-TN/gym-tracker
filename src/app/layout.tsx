@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import AuthProvider from "@/components/AuthProvider";
+import { WorkoutDraftProvider } from "@/components/WorkoutDraftContext";
+import BottomNavWrapper from "@/components/BottomNavWrapper";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -44,14 +46,14 @@ export default function RootLayout({
     >
       <body className="min-h-full bg-background text-foreground">
         <AuthProvider>
-          <div className="mx-auto flex min-h-dvh max-w-lg flex-col pb-16">
-            {children}
-          </div>
-          <BottomNavWrapper />
+          <WorkoutDraftProvider>
+            <div className="mx-auto flex min-h-dvh max-w-lg flex-col pb-16">
+              {children}
+            </div>
+            <BottomNavWrapper />
+          </WorkoutDraftProvider>
         </AuthProvider>
       </body>
     </html>
   );
 }
-
-import BottomNavWrapper from "@/components/BottomNavWrapper";

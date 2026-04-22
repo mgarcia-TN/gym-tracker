@@ -102,7 +102,7 @@ export default function HomePage() {
             Todavía no registraste ningún entreno
           </p>
           <Link
-            href="/workout/new"
+            href="/record"
             className="rounded-xl bg-accent px-6 py-3 text-sm font-bold text-background transition-colors hover:bg-accent-hover"
           >
             Registrar entreno
@@ -123,7 +123,7 @@ export default function HomePage() {
 
       {sortedDates.length > 0 && (
         <Link
-          href="/workout/new"
+          href="/record"
           className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-2xl font-bold text-background shadow-lg transition-colors hover:bg-accent-hover"
         >
           +
